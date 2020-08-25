@@ -1,0 +1,2 @@
+# EasySRAmetadata
+Easy SRA metadata
