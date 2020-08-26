@@ -4,82 +4,30 @@ Created on Mon Aug 24 22:17:21 2020
 
 @author: mrbai
 """
-
+import sys
+import os
 import xml.etree.ElementTree as ET 
 import csv 
+import subprocess
 
-def parseXML(xmlfile): 
-  
-    # create element tree object 
-    tree = ET.parse(xmlfile) 
-  
-    # get root element 
-    root = tree.getroot() 
-  
-    # create empty list for news items 
-    newsitems = [] 
-  
-    # iterate news items 
-    for item in root.findall('./EXPERIMENT_PACKAGE'): 
-        # empty news dictionary 
-        news = {} 
-  
-        # iterate child elements of item 
-        for child in item: 
-  
-            # special checking for namespace object content:media 
-            if child.tag == '{http://search.yahoo.com/mrss/}content': 
-                news['media'] = child.attrib['url'] 
-            else: 
-                news[child.tag] = child.text.encode('utf8') 
-  
-        # append news dictionary to news items list 
-        newsitems.append(news) 
-      
-    # return news items list 
-    return newsitems 
-
-def savetoCSV(newsitems, filename): 
-  
-    # specifying the fields for csv file 
-    fields = ['EXPERIMENT', 'SUBMISSION', 'Organization', 'STUDY', 'SAMPLE', 'Pool','RUN_SET'] 
-  
-    # writing to csv file 
-    with open(filename, 'w') as csvfile: 
-  
-        # creating a csv dict writer object 
-        writer = csv.DictWriter(csvfile, fieldnames = fields) 
-  
-        # writing headers (field names) 
-        writer.writeheader() 
-  
-        # writing data rows 
-        writer.writerows(newsitems) 
-  
-#newsitems = parseXML('efetchxml.xml')
-
-# store news items in a csv file 
-#savetoCSV(newsitems, 'topnews.csv') 
-
-
-
-
-#for elem in tree.iter():
-#    print (elem)
-
-#print(root)
-outdict={}
-fields=['EXPERIMENT Accession','TITLE','STUDY_REF','DESIGN_DESCRIPTION','SAMPLE_Accession','LIBRARY_NAME','LIBRARY_STRATEGY',
-        'LIBRARY_SOURCE','LIBRARY_SELECTION','LIBRARY_LAYOUT','PLATFORM']
+def replaceNone(lst):
+    return ['NA' if v is None else v for v in lst]
 
 
 def parse_experiment(expnode):
-    fields=['EXPERIMENT','TITLE','STUDY_REF','DESIGN_DESCRIPTION','SAMPLE_DESCRIPTOR',
-            'LIBRARY_NAME','LIBRARY_STRATEGY','LIBRARY_SOURCE','LIBRARY_SELECTION','LIBRARY_LAYOUT','PLATFORM']
+    #fields=['EXPERIMENT','TITLE','STUDY_REF','DESIGN_DESCRIPTION','SAMPLE_DESCRIPTOR',
+            #'LIBRARY_NAME','LIBRARY_STRATEGY','LIBRARY_SOURCE','LIBRARY_SELECTION','LIBRARY_LAYOUT','PLATFORM']
     result=[]
     for child in expnode.iter():
+        print(child.tag,child.text,child.attrib)
         childtag=child.tag
         childval=child.text
+        
+        if not childval:
+            childval='NA'
+        if not childtag:
+            childtag='NA'
+            
         childattrib=child.attrib
         if childtag == 'EXPERIMENT':
             result.append(childattrib['accession'])
@@ -116,6 +64,8 @@ def parse_experiment(expnode):
                     result.append(c.text)
                     
     #print ('\t'.join(result))
+    print(result)
+    result=replaceNone(result)
     return ('\t'.join(result))
 
 def parse_runset(run_set):
@@ -127,11 +77,20 @@ def parse_runset(run_set):
     
 def parse_run(run):
     result=[]
-    fields=['RUN']
+    #fields=['RUN']
     for child in run.iter():
         childtag=child.tag
         childval=child.text
+        if not childval:
+            childval='NA'
+        if not childtag:
+            childtag='NA'
+            
         childattrib=child.attrib
+        for a in childattrib:
+            if not childattrib[a]:
+                childattrib[a]='NA'
+                
         if childtag == 'RUN':
             result.append(childattrib['accession'])
             result.append(childattrib['alias'])
@@ -152,15 +111,7 @@ def parse_run(run):
 
 
     
-file = open("efetchall.xml",encoding='utf-8')
-xmlline = file.read().replace("\n", " ")
-file.close()
 
-xmlstr='xmldata=<?xml version="1.0"  ?>'
-xmldocs=xmlline.split(xmlstr)
-#print((xmldocs[0]))
-    
-towrite=[]
 headers=[]
 headers.append('Experiment')
 headers.append('Experiment title')
@@ -187,21 +138,13 @@ headers.append('Organism')
 
 i=0
 
-
-for xml in xmldocs:
-    #tree = ET.parse('efetchall.xml')
-    #root = tree.getroot()
-    #from string root = ET.fromstring(country_data_as_string)
-    #tree = ET.parse('efetchxml.xml')
-    root=ET.fromstring(xml)
+def processXML(xmlstring):
+    towrite=[]
+    root=ET.fromstring(xmlstring)
     for exp_pck in root:
-        i+=1
-        print(i)
-        outdict={}
-        #print('outer',exp_pck.tag,'txt',exp_pck.text)
         #find Exp node
         thisexp=exp_pck.find("EXPERIMENT") 
-        #print('TE:',thisexp,thisexp.attrib)
+        print('TE:',thisexp,thisexp.attrib)
         exprow=parse_experiment(thisexp)
         
         #find submission node 
@@ -217,15 +160,64 @@ for xml in xmldocs:
         #print this row
         
         for r in runsrow:
-            #print ('\t'.join([exprow,sraid,r]))
+            print ('\t'.join([exprow,sraid,r]))
             towrite.append('\t'.join([exprow,sraid,r]))
 
+    return '\n'.join(towrite)
+    #f=open('tsvout.tsv','w')
+    #
+    #f.write('\n'.join(towrite))
+    #f.close()
 
-f=open('tsvout.tsv','w')
-f.write('\t'.join(headers)+'\n')
-f.write('\n'.join(towrite))
-f.close()
 
+def listchunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
+#read input file
+with open(sys.argv[1]) as f:
+    srrIds=f.read().splitlines()
+
+#open outfile
+outfile=open(sys.argv[2],'w')
+outfile.write('\t'.join(headers)+'\n')
+
+#process in batch of 10
+chunks=listchunks(srrIds, 10)
+tmpfile='__tmp'
+ind=1
+for l in chunks:
+    print(ind)
+    ind+=1
+    f=open(tmpfile,'w')
+    f.write('\n'.join(l)+'\n')
+    f.close()
+    #get xml
+    cmd='epost -db sra -format acc -input '+ tmpfile+' | efetch -format native'
+    #print(cmd)
+    result = subprocess.Popen(cmd, shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    out,err = result.communicate()
+    out=out.decode("utf-8")
+    exitCode=result.returncode
+    if exitCode!=0:
+        print('ERORRRRRRRR')
+        continue
+    xmlstr=str(out.encode('utf-8').strip())
+    print(xmlstr)
+    print('XXXXXXXXXXXXXXXXXXXXXXXXXXXXx')
+    #parse this xml string
+    thisres=processXML(xmlstr)
+    thisres=str(thisres.encode('utf-8').strip())
+    #write to file
+    outfile.write(thisres+'\n')
+    
+outfile.close()
+print('Done')
+    
+
+#process in chunks
 
 
 
