@@ -1,6 +1,0 @@
-<?xml version="1.0"  ?>
-<EXPERIMENT_PACKAGE_SET>
-
-
-<Error>Cannot get server name from load balancer &apos;SRA_READ&apos; : errmsg=&apos;Service name not found in LB&apos;</Error>
-</EXPERIMENT_PACKAGE_SET>
