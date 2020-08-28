@@ -1,2 +1,2 @@
-# EasySRAmetadata
-Easy SRA metadata
+# sra-pyutils
+Wrapper around NCBI eutils to easily search SRA
